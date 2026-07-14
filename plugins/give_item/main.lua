@@ -32,7 +32,7 @@ palmod.on_command("GiveItem", function(context)
         Count = count,
         IsAssignPassive = false,
         LogDelay = 0.0,
-        bNotifyLog = true,
+        bNotifyLog = false,  -- suppress the game's item-added notification
     }, target)
 
     palmod.reply(context, "Gave " .. count .. " " .. args[1] .. " to " .. args[2])

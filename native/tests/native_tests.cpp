@@ -272,8 +272,10 @@ void test_lua_give_item() {
   actions.drain([&](const palmod::SemanticAction& action) {
     executed.push_back(action);
   });
-  // The generic plugin emits two calls by name: AddItem_ServerInternal (the
-  // grant) and BroadcastChatMessage (the confirmation). No bespoke action kind.
+  // The generic plugin emits AddItem_ServerInternal (the grant) by name. The
+  // confirmation reply is private; with no live reflection to resolve the
+  // recipient here it is logged, NOT broadcast — so no BroadcastChatMessage
+  // leaks into global chat.
   const palmod::SemanticAction* add_item = nullptr;
   bool has_broadcast = false;
   for (const auto& action : executed) {
@@ -286,7 +288,7 @@ void test_lua_give_item() {
     }
   }
   CHECK(add_item != nullptr);
-  CHECK(has_broadcast);
+  CHECK(!has_broadcast);  // reply logs, never global-broadcasts, with no recipient
   if (add_item != nullptr) {
     CHECK(add_item->actor == "Operator");
     // The item id + count arrived as named call arguments.

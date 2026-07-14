@@ -60,20 +60,22 @@ function palmod.inventory_of(name)
 end
 
 -- Reply privately to the player who issued a command — only they see the line.
--- Falls back to a global broadcast when the issuer's UId can't be resolved (e.g.
--- the command came from the local operator console, or the player just left):
--- setting ReceiverPlayerUIds to a single entry scopes the message to that player;
--- leaving it empty broadcasts to everyone.
+-- Setting ReceiverPlayerUIds to a single entry scopes the message to that player.
+-- If the issuer's UId can't be resolved (the command came from the local operator
+-- console, or the player just left), the reply is logged server-side rather than
+-- broadcast — a command reply must never leak into global chat. Use
+-- palmod.broadcast explicitly when you actually want everyone to see something.
 function palmod.reply(context, text)
+    text = tostring(text)
     local uid = context and context.player and palmod.resolve_uid(context.player)
     if uid == nil then
-        palmod.broadcast(text)
+        palmod.log("info", "reply had no in-game recipient: " .. text)
         return
     end
     palmod.call(BROADCAST, {
         ChatMessage = {
             Sender = SENDER,
-            Message = tostring(text),
+            Message = text,
             ReceiverPlayerUIds = { uid },
         },
     })
