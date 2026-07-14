@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo test --workspace --all-features
+
+  native:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build pkg-config liblua5.4-dev
+      - name: Configure
+        run: cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPALMOD_REQUIRE_LUA=ON
+      - name: Build
+        run: cmake --build build/native --parallel
+      - name: Test
+        run: ctest --test-dir build/native --output-on-failure
+
+  reverse-fixtures:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run binary-free reverse tests
+        run: PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=reverse python3 -m unittest discover -s reverse/tests -v
+      - name: Check shell scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          mapfile -t shell_scripts < <(find scripts reverse -type f -name '*.sh' -print)
+          shellcheck "${shell_scripts[@]}"

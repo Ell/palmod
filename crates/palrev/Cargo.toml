@@ -1,0 +1,22 @@
+[package]
+name = "palrev"
+description = "Repeatable Ghidra and Frida orchestration for Palworld Linux profiles"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+hex.workspace = true
+palmod-profile.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+toml.workspace = true
+
+[lints]
+workspace = true
+

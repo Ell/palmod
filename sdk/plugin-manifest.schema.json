@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://palmod.dev/schema/plugin-manifest-v1.json",
+  "title": "Palmod Lua plugin manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "version", "entrypoint"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$" },
+    "version": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "entrypoint": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+\\.lua$" },
+    "memory_limit_bytes": { "type": "integer", "minimum": 1048576, "maximum": 33554432 },
+    "instruction_limit": { "type": "integer", "minimum": 1000, "maximum": 250000 },
+    "commands": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "permission", "suppress"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,31}$" },
+          "permission": { "enum": ["everyone", "server.admin"] },
+          "suppress": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

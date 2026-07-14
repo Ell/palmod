@@ -1,0 +1,8 @@
+# Optional extras for deep reversing steps. The core palrevlib scanner,
+# verify_profile.py, and the default `make reverse-test` need none of these.
+#
+#   python -m venv .venv && .venv/bin/pip install -r reverse/requirements-optional.txt
+#
+# capstone: used by palrevlib.disasm / reverse/bin/decode_abi.py to recover
+# calling-convention hints from exec thunks and native implementations.
+capstone>=5,<6

@@ -1,0 +1,28 @@
+{
+  "frida": {
+    "cli_version": "17.6.2",
+    "role": "research-only passive dynamic observation",
+    "url": "https://github.com/frida/frida"
+  },
+  "ghidra": {
+    "archive": "ghidra_12.1.2_PUBLIC_20260605.zip",
+    "archive_sha256": "b62e81a0390618466c019c60d8c2f796ced2509c4c1aea4a37644a77272cf99d",
+    "java": "21",
+    "release_tag": "Ghidra_12.1.2_build",
+    "url": "https://github.com/NationalSecurityAgency/ghidra/releases/tag/Ghidra_12.1.2_build",
+    "version": "12.1.2"
+  },
+  "references": {
+    "patternsleuth": {
+      "commit": "fd48670daac28202301f10d487d051f262bc28c8",
+      "license": "MIT",
+      "url": "https://github.com/trumank/patternsleuth"
+    },
+    "ue4ss": {
+      "commit": "c2ac246447a8bcd92541070cb474044e7a2bbbe6",
+      "license": "MIT",
+      "url": "https://github.com/UE4SS-RE/RE-UE4SS"
+    }
+  },
+  "schema_version": 1
+}

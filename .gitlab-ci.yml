@@ -1,0 +1,159 @@
+# =============================================================================
+# Palmod GitLab CI/CD
+#
+# Mirrors the existing GitHub Actions, command-for-command:
+#   * .github/workflows/ci.yml      -> the `gates` job (cargo fmt/clippy/test,
+#                                       native cmake+ctest, python reverse
+#                                       tests, shellcheck)
+#   * .github/workflows/release.yml -> the `tarball` + `release` jobs
+#
+# The Rust toolchain is pinned to 1.95.0 (see rust-toolchain.toml).
+#
+# Pipeline shape:
+#   stage: test     -> gates    (runs on every push, MR, and tag)
+#   stage: package  -> tarball  (release build + scripts/make-dist.sh; a
+#                                downloadable dist/*.tar.gz artifact on every
+#                                push/MR, kept forever on tags)
+#                      release  (publishes a GitLab Release on version tags)
+# =============================================================================
+
+stages:
+  - test
+  - package
+
+variables:
+  # Keep cargo's registry/cache inside the project dir so GitLab can cache it
+  # (GitLab caches paths under $CI_PROJECT_DIR only).
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  # Non-interactive apt for reproducible installs.
+  DEBIAN_FRONTEND: "noninteractive"
+
+# Run a single pipeline per change: MR pipelines while an MR is open, branch
+# pipelines otherwise, plus tag pipelines. Avoids duplicate branch+MR runs.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+# Debian bookworm image that already ships cargo/rustc/rustup. We still install
+# the exact pinned toolchain in before_script to mirror the GitHub workflows.
+default:
+  image: rust:1.95-bookworm
+  before_script:
+    # Native build deps (ci.yml/release.yml install ninja-build pkg-config
+    # liblua5.4-dev) plus cmake/clang/git, and python3 + shellcheck for the
+    # reverse-test and shell-lint gates.
+    - apt-get update
+    - apt-get install -y ninja-build pkg-config liblua5.4-dev cmake clang git python3 shellcheck
+    # Pinned Rust 1.95.0 with rustfmt + clippy (matches ci.yml exactly).
+    - rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy
+
+# Shared cargo cache: registry + git deps + build output, keyed per job so the
+# gates (debug/test) and tarball (release) target dirs don't clobber each other.
+.cargo-cache: &cargo-cache
+  cache:
+    key: "cargo-$CI_JOB_NAME"
+    paths:
+      - .cargo/registry/index/
+      - .cargo/registry/cache/
+      - .cargo/git/db/
+      - target/
+
+# -----------------------------------------------------------------------------
+# test stage
+# -----------------------------------------------------------------------------
+
+# Single gate job reproducing all three ci.yml jobs (rust, native,
+# reverse-fixtures). Runs on every push, MR, and tag (no rules -> follows
+# the workflow rules above).
+gates:
+  stage: test
+  interruptible: true
+  <<: *cargo-cache
+  script:
+    # --- Rust gates (ci.yml: rust) ---
+    - cargo fmt --all --check
+    - cargo clippy --workspace --all-targets --all-features -- -D warnings
+    - cargo test --workspace --all-features
+    # --- Native loader build + tests (ci.yml: native) ---
+    - cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPALMOD_REQUIRE_LUA=ON
+    - cmake --build build/native --parallel
+    - ctest --test-dir build/native --output-on-failure
+    # --- Reverse-engineering test suite (ci.yml: reverse-fixtures) ---
+    - PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=reverse python3 -m unittest discover -s reverse/tests -v
+    # --- Shell lint over scripts/ and reverse/ (ci.yml: reverse-fixtures) ---
+    - mapfile -t shell_scripts < <(find scripts reverse -type f -name '*.sh' -print)
+    - shellcheck "${shell_scripts[@]}"
+
+# -----------------------------------------------------------------------------
+# package stage
+# -----------------------------------------------------------------------------
+
+# Build the release binaries + native loader and assemble the self-contained
+# tarball via scripts/make-dist.sh (mirrors release.yml). Produces a
+# downloadable dist/*.tar.gz artifact on every push/MR (expires after a week)
+# and on every tag (kept forever). Waits for the `test` stage to pass first.
+tarball:
+  stage: package
+  interruptible: true
+  <<: *cargo-cache
+  rules:
+    # Tag builds: keep the tarball forever.
+    - if: $CI_COMMIT_TAG
+      variables:
+        TARBALL_EXPIRE: "never"
+    # MR pushes: keep the tarball for a week.
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        TARBALL_EXPIRE: "1 week"
+    # Branch pushes: keep the tarball for a week.
+    - if: $CI_COMMIT_BRANCH
+      variables:
+        TARBALL_EXPIRE: "1 week"
+  script:
+    # Release binaries (release.yml: Build release binaries).
+    - cargo build --release -p palmod-run -p palmodctl
+    # Native loader with tests off (release.yml: Build native loader).
+    - cmake -S native -B build/native -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPALMOD_REQUIRE_LUA=ON -DPALMOD_BUILD_TESTS=OFF
+    - cmake --build build/native --parallel
+    # Assemble the tarball; version = tag when present, else the short SHA.
+    - scripts/make-dist.sh "${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+  artifacts:
+    name: "palmod-linux-x86_64-${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+    paths:
+      - dist/*.tar.gz
+    # Variable set per-rule above: "never" on tags, "1 week" on push/MR.
+    expire_in: "$TARBALL_EXPIRE"
+
+# Publish a GitLab Release on version tags, linking the tarball built by the
+# `tarball` job (mirrors release.yml's "Attach to GitHub Release" step).
+release:
+  stage: package
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  # The release-cli image is alpine-based: skip the Debian/rust before_script
+  # and the cargo cache, neither of which apply here.
+  before_script: []
+  cache: []
+  # Run after the tarball job (same stage) so its artifact exists to link.
+  needs:
+    - job: tarball
+      artifacts: false
+  rules:
+    - if: $CI_COMMIT_TAG
+  script:
+    - echo "Publishing GitLab Release for $CI_COMMIT_TAG"
+  release:
+    tag_name: "$CI_COMMIT_TAG"
+    name: "$CI_COMMIT_TAG"
+    description: "Automated Palmod release $CI_COMMIT_TAG (Linux x86_64). Tarball attached below."
+    assets:
+      links:
+        # Direct download of the exact tarball the tarball job produced for this
+        # tag. make-dist.sh names it palmod-<version>-linux-x86_64.tar.gz, and
+        # here <version> == $CI_COMMIT_TAG.
+        - name: "palmod-${CI_COMMIT_TAG}-linux-x86_64.tar.gz"
+          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/dist/palmod-$CI_COMMIT_TAG-linux-x86_64.tar.gz?job=tarball"
+          link_type: "package"

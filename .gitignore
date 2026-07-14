@@ -1,0 +1,26 @@
+/target/
+/build/
+/cmake-build-*/
+/dist/
+/.palmod-state/
+/.venv*/
+/.tools/
+/.cache/
+/artifacts/
+/lab/
+
+# Ghidra projects and crash artifacts contain large, machine-specific data.
+*.gpr
+*.rep/
+*.core
+core.*
+
+__pycache__/
+*.py[cod]
+compile_commands.json
+.DS_Store
+
+# Never commit Pocketpair binaries or live server state.
+PalServer-Linux-Shipping
+Pal/Saved/
+

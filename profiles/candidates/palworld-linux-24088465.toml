@@ -1,0 +1,81 @@
+# UNSIGNED, UNVALIDATED RESEARCH CANDIDATE.
+# The production loader must reject this file. Promote it only after passive
+# runtime observation, prototype recovery, game-thread validation, and signing.
+schema = 1
+status = "candidate"
+profile_id = "palworld-linux-24088465"
+steam_build_id = "24088465"
+depot_manifest = "3392720560779800260"
+
+# Dynamically observed on the disposable server (unvalidated). See
+# reverse/findings/24088465-static-corroboration.md.
+[reflection]
+ufunction_func_offset = 0xd8
+ufunction_vtable_va = 0x1a48018
+# FFrame Locals (Parms) offset — a per-build constant shared by every exec-thunk,
+# used by generic by-name hooks (pal.hook) to reach the arguments.
+fframe_locals_offset = 0x28
+# FNamePool.Blocks VA (RVA 0xbe7b0c0 + image base 0x200000) — lets generic hooks
+# resolve NameProperty args (item ids, tags) to strings instead of raw indices.
+fname_pool_blocks_va = 0xc07b0c0
+# UObject::ProcessEvent vtable slot (0x7b4ae30 = vtable[77], same across all
+# classes) — the generic dispatch entry to call any UFunction by name.
+process_event_vtable_slot = 77
+# GUObjectArray Objects VA + UStruct::SuperStruct offset — the object-array
+# walker (generic call target + admin check) resolves names/IsA with these.
+guobjectarray_objects_va = 0xc11d888
+super_struct_offset = 0x40
+
+# Chat interception (BroadcastChatMessage thunk @ VA 0x6a819a0 = rva 0x68819a0;
+# FPalChatMessage Sender @ 0x08, Message @ 0x28; all confirmed live).
+[reflection.chat]
+broadcast_thunk_rva = 0x68819a0
+fframe_locals_offset = 0x28
+message_sender_offset = 0x8
+message_text_offset = 0x28
+
+
+# Game-thread drain pump: swap GEngine (pointer @ 0xc2a2b88) -> UEngine::Tick
+# (vtable slot 97) to drain the action queue once per frame on the game thread
+# (UE4SS's EngineTick method, done as a data-pointer swap). All three values are
+# recovered by `reverse/bin/recover_engine_facts.py` — one command per build.
+[reflection.engine_tick]
+gengine_global_va = 0xc2a2b88
+tick_vtable_slot = 97
+
+# Server-side admin check: honor Palworld's admin login by reading
+# PalPlayerController.bAdmin @ 0x850 (live-validated: flips to 1 on in-game
+# AdminPassword login), correlating the chat SenderPlayerUId (Guid @ 0x18) to
+# PalPlayerState.PlayerUId (@ 0x590) via AController.PlayerState (@ 0x298).
+[reflection.admin]
+controller_class = "PalPlayerController"
+player_state_offset = 0x298
+player_uid_offset = 0x590
+badmin_offset = 0x850
+sender_player_uid_offset = 0x18
+
+[elf]
+sha256 = "a05788ead7619db22a1509c43241c16d289ed7040e8bcbb2e36e13e223e822f9"
+build_id = "217802a00653a9c4"
+machine = "x86_64"
+bits = 64
+endian = "little"
+elf_type = "ET_EXEC"
+image_base = 2097152
+file_size = 196281496
+
+[anchors.add_item_server_internal_reflected_name]
+rva = 11265559
+expected_bytes = "41 64 64 49 74 65 6D 5F 53 65 72 76 65 72 49 6E 74 65 72 6E 61 6C 00"
+validators = ["unique"]
+
+[anchors.add_item_server_internal_implementation]
+rva = 120374528
+expected_bytes = "55 41 57 41 56 41 55 41 54 53 48 83 EC 78 45 89 C4 F3 0F 11 44 24 1C 89"
+validators = ["executable", "unique"]
+
+[anchors.broadcast_chat_message_implementation]
+rva = 117481696
+expected_bytes = "55 41 57 41 56 41 55 41 54 53 48 81 EC 28 01 00 00 49 89 F6 49 89 FD E8"
+validators = ["executable", "unique"]
+

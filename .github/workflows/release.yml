@@ -1,0 +1,52 @@
+name: release
+
+# Build a self-contained Linux release tarball. Runs on every version tag (and
+# on demand), uploads the tarball as a build artifact, and attaches it to the
+# GitHub Release for tags.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tarball:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # so `git describe` in make-dist.sh sees tags
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+
+      - name: Install native dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build pkg-config liblua5.4-dev
+
+      - name: Build release binaries
+        run: cargo build --release -p palmod-run -p palmodctl
+
+      - name: Build native loader
+        run: |
+          cmake -S native -B build/native -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPALMOD_REQUIRE_LUA=ON -DPALMOD_BUILD_TESTS=OFF
+          cmake --build build/native --parallel
+
+      - name: Assemble tarball
+        run: scripts/make-dist.sh "${{ github.ref_name }}"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: palmod-linux-x86_64
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: gh release create "${{ github.ref_name }}" dist/*.tar.gz --generate-notes --title "${{ github.ref_name }}"
+        env:
+          GH_TOKEN: ${{ github.token }}

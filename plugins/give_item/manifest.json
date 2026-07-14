@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "palmod.give_item",
+  "version": "0.1.0",
+  "entrypoint": "main.lua",
+  "memory_limit_bytes": 8388608,
+  "instruction_limit": 50000,
+  "commands": [
+    {
+      "name": "GiveItem",
+      "permission": "server.admin",
+      "suppress": true
+    }
+  ]
+}
